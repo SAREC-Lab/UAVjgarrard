@@ -135,7 +135,7 @@ def get_distance_meters(locationA, locationB):
 #################
 def printLog(msg):
     fh = open("TripLog.log", "a")
-    write(msg)
+    fh.write(msg)
     fh.close()
 
 def initLog():
@@ -171,7 +171,7 @@ if __name__ == '__main__':
     c = 1
 
     #Knott Hall is located at 41.7036819, -86.2337332
-    coords = [ [41.7036819, -86.2337332], [41.7163829, -86.5497332], [41.7136859, -85.8799332] ]
+    coords = [ [41.7036819, -86.2337332], [41.7036929, -86.2337358], [41.7036859, -86.2333332] ]
     for coord in coords:
       print "Fly to waypoint {}".format(c)
       c+=1
