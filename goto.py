@@ -5,6 +5,7 @@
 
 """
 Modified from 3DR simple_goto.py
+Then modified from SE_with_drones 02 goto.py
 """
 
 from dronekit import connect, VehicleMode, LocationGlobalRelative
