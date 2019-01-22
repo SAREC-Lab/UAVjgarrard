@@ -161,7 +161,7 @@ def fly_to(vehicle, targetLocation, groundspeed, startTag, endTag):
         remainingDistance=get_distance_meters(currentTargetLocation,vehicle.location.global_frame)
         if remainingDistance< 1:
             print "Arrived at waypoint."
-            printLog("Arrived at waypoint.")
+            printLog("Arrived at waypoint.\n")
             break;
         time.sleep(1)
 
