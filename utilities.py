@@ -146,12 +146,14 @@ class thread_fly_to(threading.Thread):
 	printLog("\nRunning collision avoidance w/ UAV-{}".format(other), self.fname)
 	self.vehicle.groundspeed = self.groundspeed
 	self.vehicle.simple_goto(LocationGlobalRelative(self.route[0][0], self.route[0][1], alt))
-	time.sleep(1)
+	time.sleep(3)
+	printLog("Location: {}".format(self.vehicle.location.global_relative_frame), self.fname)
 
     def resume(self):
-	printLog("Resuming execution", self.fname)
-	self.interrupt = 0
-	time.sleep(1)
+	if not self.crash:
+	  printLog("Resuming execution", self.fname)
+	  self.interrupt = 0
+	  time.sleep(1)
 
     def go_down(self, other):
 	printLog("Landing without grace - we crashed into UAV-{}".format(other), self.fname)
@@ -187,6 +189,7 @@ def monitor(thread1, thread2, uav1, uav2):
   #Allow the uavs to avoid until a safe distance away
   while get_distance_meters(uav1.location.global_relative_frame, uav2.location.global_relative_frame, None) <= 4:
     time.sleep(1)
+  print "resuming"
   thread1[0].resume()
   thread2[0].resume()
   return

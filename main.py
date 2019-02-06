@@ -27,32 +27,37 @@ def load_json(path2file):
 
     return d
 
-for w in range(1,6):
-  testFile = "./test{}.json".format(w)
-  config = load_json(testFile)
+if len(sys.argv) < 2 or len(sys.argv) > 3:
+  print "Improper use!\n./main.py <1-5> -ca, where 1-5 is the test file and -ca enables avoidance"
+  sys.exit() 
+
+avoid = 0
+testFile = "./test{}.json".format(sys.argv[1])
+if len(sys.argv) == 3:
+  avoid = 1
+
+config = load_json(testFile)
   
-  avoid = 0
-  for v in range(1,2):
 
-    # A list of sitl instances.
-    sitls = []
+# A list of sitl instances.
+sitls = []
 
-    # A list of drones. (dronekit.Vehicle)
-    vehicles = []
+# A list of drones. (dronekit.Vehicle)
+vehicles = []
 
-    # A list of lists of lists (i.e., [ [ [lat0, lon0, alt0], ...] ...]
-    # These are the waypoints each drone must go to!
-    routes = []
+# A list of lists of lists (i.e., [ [ [lat0, lon0, alt0], ...] ...]
+# These are the waypoints each drone must go to!
+routes = []
 
-    # This is really temporary for this assignment so we can track IDs for each drone
-    # Next week we'll integrate with Dronology and replace it.
-    copters = []
+# This is really temporary for this assignment so we can track IDs for each drone
+# Next week we'll integrate with Dronology and replace it.
+copters = []
 
-    # Start up all the drones specified in the json configuration file
-    for i, v_config in enumerate(config):
+# Start up all the drones specified in the json configuration file
+for i, v_config in enumerate(config):
     	copter = UAV_Copter()
     	home = v_config['start']
-    	vehicle, sitl = copter.connect_vehicle(i, home)
+   	vehicle, sitl = copter.connect_vehicle(i, home)
     	sitls.append(sitl)
     	vehicles.append(vehicle)
     	routes.append(v_config['waypoints'])
@@ -60,37 +65,36 @@ for w in range(1,6):
     	copter.setvalues(sitl, vehicle, v_config['waypoints'], vehicle_id)
     	copters.append(copter)
 
-    #have each vehicle launch to altitude before beginning to fly
-    #could be done w/ threads and joins but not as important rn 
-    for vehicle in vehicles: 
+#have each vehicle launch to altitude before beginning to fly
+#could be done w/ threads and joins but not as important rn 
+for vehicle in vehicles: 
   	utilities.arm_and_takeoff(vehicle, 10)
 
-    #Use a thread dictionary so they can be grabbed, and stopped
-    threads = {}
+#Use a thread dictionary so they can be grabbed, and stopped
+threads = {}
 
-    print ""
+log_name = "CA-{}Test-{}.log".format(avoid, sys.argv[1])
+utilities.initLog(log_name)
 
-    for i, vehicle in enumerate(vehicles):
+for i, vehicle in enumerate(vehicles):
   	name = "UAV-{}.log".format(i)
-  	utilities.printLog("{}: starting {}".format(time.time(), name), "Controller.log")
+  	utilities.printLog("{}- starting {}".format(time.time(), name), log_name)
   	q = Queue.Queue()
   	utilities.initLog(name)
 	threads[name] = [utilities.thread_fly_to(args=(vehicle, routes[i], 10, 1, name, q,)), q, i]
   	threads[name][0].start()
 
-    min_separation = 6
-    log_name = "CA-{}Test-{}.log".format(avoid,w)
-    utilities.initLog(log_name)
-    monitorThreads = {}
-    crashedUAVs = []
+min_separation = 6
+monitorThreads = {}
+crashedUAVs = []
 
-    while 1:
-  	#Log coords if c == 100
-  	utilities.printLog("time-{}\n\tUAV-0: {}\n\tUAV-1:{}\n\tUAV-2:{}".format(time.time(),
-	vehicles[0].location.global_relative_frame,
-	vehicles[1].location.global_relative_frame,
-	vehicles[2].location.global_relative_frame), log_name)
-  
+while 1:
+	msg = ""
+	count = 1
+	for vehicle in vehicles:
+	  msg = msg + "UAV-{}: {}\n\t".format(count, vehicle.location.global_relative_frame)
+  	  count += 1
+	utilities.printLog("time-{}\n\t{}".format(time.time(), msg), log_name)
 
   	#check all vehicles for collisions
   	for uav in range(len(vehicles)):
@@ -106,7 +110,7 @@ for w in range(1,6):
 	    #crash here
 	    if dist <= 4:
 		if uav not in crashedUAVs:
-		  utilities.printLog("time-{}: UAV-{} and UAV-{} have crashed!".format(time.time(), uav, x), "Controller.log")
+		  utilities.printLog("**CRASH**time-{}: UAV-{} and UAV-{} have crashed!".format(time.time(), uav, x), log_name)
 		  key1 = "UAV-{}.log".format(uav)
 	  	  print "UAV-{} has finished".format(uav)
 		  t1 = threading.Thread(target=utilities.crash, args=(threads[key1], x,))
@@ -122,34 +126,35 @@ for w in range(1,6):
 		  del threads[key2]
 
 	    elif dist <= min_separation and avoid:
+		print "Avoid!"
 		key = "{}{}".format(uav,x)
+		key1 = "UAV-{}.log".format(uav)
+		key2 = "UAV-{}.log".format(x)
+		print "{}/{}".format(key1,key2)
+		print "{}".format(threads.keys())
 		if key in monitorThreads.keys():
 		  if not monitorThreads[key].isAlive():
 			del monitorThreads[key]
 		  else:
 		  	continue
-		else:
-		  utilities.printLog("time-{}: UAV-{} and UAV-{} are about to crash!".format(time.time(),uav, x), "Controller.log")
-		  key1 = "UAV-{}.log".format(uav)
-		  key2 = "UAV-{}.log".format(x)
+		elif key1 in threads.keys() and key2 in threads.keys():
+		  print("UAV-{} and UAV-{} are too close!".format(uav,x))
+		  utilities.printLog("time-{}: UAV-{} and UAV-{} are about to crash!".format(time.time(),uav, x), log_name)
 		  monitorThreads[key] = threading.Thread(target=utilities.monitor, args=(threads[key1], threads[key2], vehicles[uav], vehicles[x],))
 		  monitorThreads[key].start()
 			#change altitude
 
-      	    for k in threads.keys():
-		#If len(keys) == 0 then all threads are done, we can exit
-		if len(k) == 0:
-	  	  break
+	#Check if we've already gotten rid of all UAV threads
+    	if len(threads.keys()) == 0:
+		break
 
+	#Monitor UAV threads
+      	for k in threads.keys():
 		#If a thread has finished running, remove the corresponding vehicle
 		if not threads[k][0].isAlive():
 	  	  #We should probably kill the vehicles from the list around here too
 	  	  print "{} has finished".format(k)
 	  	  del threads[k]
-
-    	    if len(threads.keys()) == 0:
-		break
-  avoid = 1  
 
 for sitl in sitls:
   sitl.stop() 
