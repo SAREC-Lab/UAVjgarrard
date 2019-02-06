@@ -6,27 +6,25 @@ Modified from 3DR simple_goto.py
 """
 
 from dronekit import connect, VehicleMode, LocationGlobalRelative
-import time
 from math import sin, cos, sqrt, atan2, radians, sqrt
 import logging
-import time
 import os
 import time
 import datetime
-
-
+import threading
 
 ################################################################################################
-#Set up option parsing to get connection string
+#Logging Utilities
 ################################################################################################
-import argparse  
-parser = argparse.ArgumentParser(description='Commands vehicle using vehicle.simple_goto.')
-parser.add_argument('--connect', 
-                   help="Vehicle connection target string. If not specified, SITL automatically started and used.")
-args = parser.parse_args()
+def printLog(msg, fname):
+  fh = open(fname, 'a')
+  fh.write(msg)
+  fh.write('\n')
+  fh.close()
 
-connection_string = args.connect
-sitl = None
+def initLog(fname):
+  fh = open(fname, 'w')
+  fh.close()
 
 
 
@@ -78,7 +76,7 @@ def arm_and_takeoff(vehicle, aTargetAltitude):
 # parameters:  Two global relative locations
 # returns:     Distance in meters
 ################################################################################################
-def get_distance_meters(locationA, locationB):
+def get_distance_meters(locationA, locationB, fname):
     # approximate radius of earth in km
     R = 6373.0
 
@@ -95,43 +93,104 @@ def get_distance_meters(locationA, locationB):
 
     distance = (R * c) * 1000
 
-    print("Distance (meters): {}".format(distance))
+    if fname:
+    	printLog("\tDistance (meters): {}".format(distance, locationA), fname)
     return distance
 
 
-
-
 ################################################################################################
-# Fly to
+# Threaded Fly to
 ################################################################################################
-def fly_to(vehicle, targetLocation, groundspeed, startTag, endTag):
-    print "Flying from: " + str(vehicle.location.global_frame.lat) + "," + str(vehicle.location.global_frame.lon) + " to " + str(targetLocation.lat) + "," + str(targetLocation.lon)
-    vehicle.groundspeed = groundspeed
-    currentTargetLocation = targetLocation
-    vehicle.simple_goto(currentTargetLocation)
-    remainingDistance=get_distance_meters(currentTargetLocation,vehicle.location.global_frame)
+class thread_fly_to(threading.Thread):
+    def __init__(self, group=None, target=None, name=None, args=(), kwargs=None, verbose=None):
+	threading.Thread.__init__(self, group=group, target=target, name=name, verbose=verbose)
+	self.vehicle = args[0]
+	self.route = args[1]
+	self.groundspeed = args[2]
+	self.dist = args[3]
+	self.fname = args[4]
+	self.q = args[5]
+    	self.kwargs = kwargs
+	self.interrupt = 0
+	self.crash = 0
+	return
 
-    while vehicle.mode.name=="GUIDED":
-        remainingDistance=get_distance_meters(currentTargetLocation,vehicle.location.global_frame)
-        print remainingDistance
-        if remainingDistance< 1:
-            print "Reached target"
-            break;
-        time.sleep(1)
+    # Fly to
+    def fly_to(self, targetLocation):
+    	printLog("Flying to waypoint: {}".format(targetLocation), self.fname)
+    	self.vehicle.groundspeed = self.groundspeed
+    	currentTargetLocation = targetLocation
+    	self.vehicle.simple_goto(currentTargetLocation)
 
+    	while self.vehicle.mode.name=="GUIDED":
+ 	  if self.interrupt:
+	    break
 
-if __name__ == '__main__':
-    arm_and_takeoff(10)
-    print "Fly to waypoint 1"
-    fly_to(vehicle, LocationGlobalRelative(41.71500, -86.24230, 20), 10, "GOTO-1-START", "GOTO-1-END")
-    print
-    "Returning to Launch"
-    vehicle.mode = VehicleMode("RTL")
-    # Close vehicle object before exiting script
-    print
-    "Close vehicle object"
-    vehicle.close()
+          remainingDistance=get_distance_meters(currentTargetLocation,self.vehicle.location.global_frame, self.fname)
 
-    # Shut down simulator if it was started.
-    if sitl is not None:
-        sitl.stop()
+          if remainingDistance< self.dist:
+            printLog("Reached target", self.fname)
+            break
+          printLog("\tTime:{} \n\tCoords: {}".format(time.time(), self.vehicle.location.global_relative_frame), self.fname)
+
+          time.sleep(1)
+
+#	  if plotLog:
+#	    plotLog.add_data(vehicle.location.global_relative_frame.lon,vehicle.location.global_relative_frame.lat)
+    	printLog("\n", self.fname)
+#	return
+
+    def avoid(self, alt, other):
+	self.interrupt = 1
+	self.fly_to(self.vehicle.location.global_relative_frame)
+	printLog("\nRunning collision avoidance w/ UAV-{}".format(other), self.fname)
+	self.vehicle.groundspeed = self.groundspeed
+	self.vehicle.simple_goto(LocationGlobalRelative(self.route[0][0], self.route[0][1], alt))
+	time.sleep(1)
+
+    def resume(self):
+	printLog("Resuming execution", self.fname)
+	self.interrupt = 0
+	time.sleep(1)
+
+    def go_down(self, other):
+	printLog("Landing without grace - we crashed into UAV-{}".format(other), self.fname)
+	self.interrupt = 1
+	self.fly_to(self.vehicle.location.global_relative_frame)
+	self.crash = 1
+
+    def run(self):	
+    	c = 1
+	while len(self.route) > 0:
+	  if self.crash:
+	    break
+	  elif self.interrupt:
+	    continue
+	  #Somehow I'm getting here with an empty list
+	  elif len(self.route) > 0:
+	    self.fly_to(LocationGlobalRelative(self.route[0][0],self.route[0][1], self.route[0][2]))
+	    if self.interrupt:
+		continue
+	    self.route.pop(0)
+	    printLog("Shouldn't see on interrupt{}".format(self.route), self.fname)
+    	printLog("Returning to Launch", self.fname)
+    	self.vehicle.mode = VehicleMode("RTL")
+    	# Close vehicle object before exiting script
+    	printLog("Closing vehicle object", self.fname)
+    	self.vehicle.close()
+	return
+
+def monitor(thread1, thread2, uav1, uav2):
+  thread1[0].avoid(5, thread2[2])
+  thread2[0].avoid(15, thread2[2])
+
+  #Allow the uavs to avoid until a safe distance away
+  while get_distance_meters(uav1.location.global_relative_frame, uav2.location.global_relative_frame, None) <= 4:
+    time.sleep(1)
+  thread1[0].resume()
+  thread2[0].resume()
+  return
+
+def crash(thread, other):
+  thread[0].go_down(other)
+  return
