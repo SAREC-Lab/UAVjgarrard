@@ -10,109 +10,75 @@ import threading, Queue
 import time
 import sys
 import flight_utils 
+import classtest
+from ground_control_station import SimpleGCS
 
 #parse option for dronology
-if len(sys.argv) < 2 or len(sys.argv) > 3:
-  print "Improper use!\n./main.py <1-5> -ca, where 1-5 is the test file and -ca enables avoidance"
+if len(sys.argv) != 2:
+  print "Improper use!\n./main.py <1-6> <1-5> \n\tspecify test file and number of UAVs!"
   sys.exit() 
 
 avoid = 0
-testFile = "./test{}.json".format(sys.argv[1])
-if len(sys.argv) == 3:
-  avoid = 1
 
+testFile = "./homework_testcases/test{}.json".format(sys.argv[1])
 config = flight_utils.load_json(testFile)
-  
-# A list of sitl instances.
-sitls = []
+#Maybe later config file will be a list of areas to search but for now nah
+config = config[0]
+
+numUAV = len(config["starts"])
+print "{} UAVs".format(numUAV)
+log_name = "SearchBox.log"
+flight_utils.initLog(log_name)
+flight_utils.printLog("{} UAVs found in config file".format(numUAV), log_name)
+#bounds = config["bounds"]
+lLat = classtest.getsouth()
+hLat = classtest.getnorth()
+lLon = classtest.geteast()
+hLon = classtest.getwest()
+
+# These are the waypoints each drone must go to!
+routes = flight_utils.gen_search(lLat, hLat, lLon, hLon, numUAV, log_name)
+flight_utils.printRoute(routes)
+
+#This should end the dronology thread
+global DO_CONT
+DO_CONT = 0
 
 # A list of drones. (dronekit.Vehicle)
 vehicles = []
 
-# These are the waypoints each drone must go to!
-routes = []
+ARDUPATH = "/home/uav/git/ardupilot"
+gcs = SimpleGCS(ARDUPATH)
+gcs.connect()
 
-###Connect to dronology
+##Connect to dronology
 # Start up all the drones specified in the json configuration file
-for i, v_config in enumerate(config):
-#    	copter = UAV_Copter()
-    	home = v_config['start']
-   	vehicle, sitl = copter.connect_vehicle(i, home)
-    	sitls.append(sitl)
-    	vehicles.append(vehicle)
-    	routes.append(v_config['waypoints'])
-    	vehicle_id = str("UAV-" + str(i))
+for i, start in enumerate(config['starts']):
+    	home = start 
+   	name = "UAV-" + str(i)
 
-log_name = "CA-{}Test-{}.log".format(avoid, sys.argv[1])
-flight_utils.initLog(log_name)
+	vehicle = gcs.registerDrone(home, name)
+    	vehicles.append(vehicle)
+    	vehicle_id = str("UAV-" + str(i))
 
 #Have each vehicle launch to altitude before beginning to fly
 flight_utils.mult_arm_and_takeoff(vehicles, [10] * len(vehicles))
 
 #Begin flight for all vehicles
-threads = flight_utils.threaded_launch(vehicles)
+speed = 10
+dist = 1
+threads = flight_utils.threaded_launch(vehicles, routes, speed, dist, lLat, hLat, lLon, hLon, log_name)
 
 min_separation = 6
-monitorThreads = {}
-crashedUAVs = []
 
+box_lat, box_lon = classtest.getboxcoordinates()
+
+#Thread to write vehicles locations to file
+log_thread = flight_utils.log_locs(args=(vehicles, log_name,flight_utils.Location(box_lat, box_lon),))
+log_thread.start()
+
+nearUAV = -1
 while 1:
-	#Make functions out of these shits
-	msg = ""
-	count = 1
-	for vehicle in vehicles:
-	  msg = msg + "UAV-{}: {}\n\t".format(count, vehicle.location.global_relative_frame)
-  	  count += 1
-	flight_utils.printLog("time-{}\n\t{}".format(time.time(), msg), log_name)
-
-  	#check all vehicles for collisions
-  	for uav in range(len(vehicles)):
-	  #if this is the last drone, we've already checked it against everything
-	  if uav == len(vehicles)-1:
-	    break
-
-	  #To make this more efficient we could remove vehicles when that vehicles thread finishes, but we get indexing issues into the vehicles list
-	  for x in range(uav + 1, len(vehicles)):
-	    dist = flight_utils.get_distance_meters(vehicles[uav].location.global_relative_frame, vehicles[x].location.global_relative_frame,None)
-	  
-	    #launch a monitor thread to see when two drones can resume their routes at regular altitude, or if we "crash" down the vehicles
-	    #crash here
-	    if dist <= 4:
-		if uav not in crashedUAVs:
-		  flight_utils.printLog("**CRASH**time-{}: UAV-{} and UAV-{} have crashed!".format(time.time(), uav, x), log_name)
-		  key1 = "UAV-{}.log".format(uav)
-	  	  print "UAV-{} has finished".format(uav)
-		  t1 = threading.Thread(target=flight_utils.crash, args=(threads[key1], x,))
-		  t1.start()
-		  crashedUAVs.append(uav)
-	  	  del threads[key1]
-		if x not in crashedUAVs:
-		  key2 = "UAV-{}.log".format(x)
-	  	  print "UAV-{} has finished".format(x)
-		  t2 = threading.Thread(target=flight_utils.crash, args=(threads[key2], uav,))
-		  t2.start()
-		  crashedUAVs.append(x)
-		  del threads[key2]
-
-	    elif dist <= min_separation and avoid:
-		print "Avoid!"
-		key = "{}{}".format(uav,x)
-		key1 = "UAV-{}.log".format(uav)
-		key2 = "UAV-{}.log".format(x)
-		print "{}/{}".format(key1,key2)
-		print "{}".format(threads.keys())
-		if key in monitorThreads.keys():
-		  if not monitorThreads[key].isAlive():
-			del monitorThreads[key]
-		  else:
-		  	continue
-		elif key1 in threads.keys() and key2 in threads.keys():
-		  print("UAV-{} and UAV-{} are too close!".format(uav,x))
-		  flight_utils.printLog("time-{}: UAV-{} and UAV-{} are about to crash!".format(time.time(),uav, x), log_name)
-		  monitorThreads[key] = threading.Thread(target=flight_utils.monitor, args=(threads[key1], threads[key2], vehicles[uav], vehicles[x],))
-		  monitorThreads[key].start()
-			#change altitude
-
 	#Check if we've already gotten rid of all UAV threads
     	if len(threads.keys()) == 0:
 		break
@@ -120,12 +86,29 @@ while 1:
 	#Monitor UAV threads
       	for k in threads.keys():
 		#If a thread has finished running, remove the corresponding vehicle
-		if not threads[k][0].isAlive():
+		if not threads[k].isAlive():
 	  	  #We should probably kill the vehicles from the list around here too
 	  	  print "{} has finished".format(k)
 	  	  del threads[k]
+	
+	nearUAV = flight_utils.check_box(vehicles, flight_utils.Location(box_lat, box_lon))
+	if nearUAV > -1:
+	  closest, target = flight_utils.drone_found(threads, vehicles, nearUAV, log_name)
+	  #print "Closest: {}".format(closest) 
+	  #print "Targe: {}".format(target) 
+	  #while flight_utils.get_distance_meters(flight_utils.Location(target[0],target[1]), flight_utils.get_location(vehicles[closest]), None) > 10:
+	  	#print flight_utils.get_distance_meters(flight_utils.Location(target[0],target[1]), flight_utils.get_location(vehicles[closest]), None)
+	#	time.sleep(1)
+	#  print "Cleaning up!"
+	  flight_utils.printLog("time-{}\n\tUAV-{} arrived at box!".format(closest), log_name)
+	  time.sleep(25)
+	  flight_utils.printLog("time-{}\n\tUAV-{} and UAV-{} returning home".format(nearUAV, closest), log_name)
+	  
+	#If we have more than 1 UAV we check for collisions
+	#if(len(vehicles) > 1):
+	#  flight_utils.check_collisions(vehicles, threads, avoid, min_separation, log_name)
 
-for sitl in sitls:
-  sitl.stop() 
+log_thread.stop()
+print "Execution completed"
+DO_CONT = 0
 
- 
