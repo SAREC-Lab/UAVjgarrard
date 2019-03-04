@@ -1,0 +1,67 @@
+home: 41.714870,-86.240956,221,0
+Connecting to vehicle on: tcp:127.0.0.1:5760
+We took off
+Flying to LocationGlobalRelative:lat=41.714487,lon=-86.240258,alt=20
+	71.9608519987 meters away from target
+	71.9209165096 meters away from target
+	71.2887404229 meters away from target
+	69.8519934435 meters away from target
+	67.5040507106 meters away from target
+	64.1830941759 meters away from target
+	59.8636179529 meters away from target
+	54.5603145489 meters away from target
+	48.4254458569 meters away from target
+	41.671906562 meters away from target
+	34.5590700253 meters away from target
+	27.4396196906 meters away from target
+	20.5663951936 meters away from target
+	14.2920042532 meters away from target
+	8.8826193668 meters away from target
+	4.5777697867 meters away from target
+	1.49746631217 meters away from target
+	0.183406818051 meters away from target
+Arrived at waypoint
+
+Flying to LocationGlobalRelative:lat=41.71525,lon=-86.240862,alt=20
+	98.7295919245 meters away from target
+	99.0086541578 meters away from target
+	98.2621929176 meters away from target
+	96.6823441038 meters away from target
+	94.2169166227 meters away from target
+	90.8156060198 meters away from target
+	86.4504482368 meters away from target
+	81.1057886186 meters away from target
+	74.9382326098 meters away from target
+	68.135625466 meters away from target
+	60.861521458 meters away from target
+	53.2135971581 meters away from target
+	45.2832120369 meters away from target
+	37.3294731585 meters away from target
+	29.5509733574 meters away from target
+	22.2440030835 meters away from target
+	15.6539234265 meters away from target
+	10.0633496419 meters away from target
+	5.58412051867 meters away from target
+	2.33829953704 meters away from target
+	0.485864856021 meters away from target
+Arrived at waypoint
+
+Flying to LocationGlobalRelative:lat=41.7148702,lon=-86.2409563,alt=19.455
+	42.7410057741 meters away from target
+	43.0451283182 meters away from target
+	42.3738687689 meters away from target
+	40.8649415386 meters away from target
+	38.4761912087 meters away from target
+	35.1546850894 meters away from target
+	30.8515869538 meters away from target
+	25.6975708817 meters away from target
+	20.1198516565 meters away from target
+	14.5534380154 meters away from target
+	9.39062457197 meters away from target
+	5.06107146147 meters away from target
+	1.85761243883 meters away from target
+	0.314373667978 meters away from target
+Arrived at waypoint
+
+Done flying
+Landing
