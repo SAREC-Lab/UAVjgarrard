@@ -133,7 +133,7 @@ def fly_to(dist, vehicle, targetLocation, fname):
   printLog("Flying to {}".format(targetLocation), fname)
 
   remDistance = get_distance_meters(targetLocation, vehicle.location.global_relative_frame)
-  printLog("\t{} meters away from target".format(remDistance), fname)
+  printLog("\t{} meters away from target -> {}".format(remDistance, vehicle.location.global_relative_frame), fname)
 
   while vehicle.mode.name == "GUIDED":
     if remDistance < dist:
@@ -141,6 +141,6 @@ def fly_to(dist, vehicle, targetLocation, fname):
 	break
     time.sleep(1)
     remDistance = get_distance_meters(targetLocation, vehicle.location.global_relative_frame)
-    printLog("\t{} meters away from target".format(remDistance), fname)
+    printLog("\t{} meters away from target -> {}".format(remDistance, vehicle.location.global_relative_frame), fname)
 
 

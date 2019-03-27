@@ -8,6 +8,9 @@ sitl = None
 fname = "FlightLog.log"
 utils.initLog(fname)
 
+if len(sys.argv) > 1:
+  connection_string = sys.argv[1]
+
 configs = utils.load_json("./test.json")
 
 waypoints = []
@@ -18,6 +21,9 @@ for wps in configs['waypoints']:
 if not connection_string:
   sitl, connection_string = utils.connect_SITL(fname)
   vehicle = utils.connect_Vehicle(connection_string, fname)
+else:
+  vehicle = dronekit.connect(connection_string, baud=57600, wait_ready=False)
+
 
 utils.arm_and_takeoff(vehicle, 20)
 utils.printLog("We took off", fname)
