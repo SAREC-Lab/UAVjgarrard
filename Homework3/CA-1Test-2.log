@@ -1,0 +1,7 @@
+1556896220.29- starting UAV-0.log
+1556896220.29- starting UAV-1.log
+time-1556896220.29
+	UAV-1: LocationGlobalRelative:lat=41.7154141,lon=-86.2418172,alt=9.99
+	UAV-2: LocationGlobalRelative:lat=41.715414,lon=-86.2418381,alt=9.836
+	
+**CRASH**time-1556896220.29: UAV-0 and UAV-1 have crashed!
